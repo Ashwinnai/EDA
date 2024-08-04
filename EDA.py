@@ -184,6 +184,46 @@ def main():
 
     # Sidebar with creator information and file upload
     st.sidebar.markdown("### Made by Ashwin Nair")
+
+    # Instruction popover
+    with st.sidebar.expander("ℹ️ How to Use the App", expanded=False):
+        st.markdown(
+            """
+            **Instructions**  
+            - **Upload Data File**: Upload your CSV or Excel file containing the data you want to analyze. 
+              Ensure the file has at least two columns:  
+              - **Date Column**: The first column should be a date column in one of the following formats: 
+                `%d-%b-%y`, `%Y-%m-%d`, `%d/%m/%Y`, or `%m/%d/%Y`.
+              - **Value Column**: At least one column should contain numeric data for analysis.
+            - **Optional Fiscal Calendar**: Upload a fiscal calendar in Excel format if you wish to perform fiscal year analysis. 
+              The fiscal calendar file must contain the following columns:
+              - `Date`: Dates in a recognized format.
+              - `FiscalYear`: Integer representing the fiscal year.
+              - `FiscalMonth`: Integer representing the fiscal month.
+              - `FiscalWeek`: Integer representing the fiscal week.
+            - **Navigation**: Use the sidebar to select different pages for profiling, data exploration, and time series analysis.
+            - **Calendar Selection**: Choose between a normal calendar or fiscal calendar for the analysis if a fiscal calendar is provided.
+
+            **Data Format Example**:  
+            ```
+            | Date       | Sales |
+            |------------|-------|
+            | 01-Jan-23  | 200   |
+            | 02-Jan-23  | 220   |
+            | 03-Jan-23  | 215   |
+            ```
+
+            **Fiscal Calendar Example**:  
+            ```
+            | Date       | FiscalYear | FiscalMonth | FiscalWeek |
+            |------------|------------|-------------|------------|
+            | 01-Jan-23  | 2023       | 1           | 1          |
+            | 02-Jan-23  | 2023       | 1           | 1          |
+            | 03-Jan-23  | 2023       | 1           | 1          |
+            ```
+            """
+        )
+
     st.sidebar.title("Upload your CSV or Excel file")
     uploaded_file = st.sidebar.file_uploader("Drag and drop your data file here", type=["csv", "xlsx"])
 
