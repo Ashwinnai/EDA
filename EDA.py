@@ -12,7 +12,7 @@ from ydata_profiling import ProfileReport
 import calendar
 
 # Set page config
-st.set_page_config(page_title="Exploratory Data Analysis App by Ashwin Nair", layout="wide")
+st.set_page_config(page_title="Exploratory Data Analysis App", layout="wide")
 
 def save_uploaded_file(uploadedfile, directory="tempDir"):
     """Save uploaded file temporarily."""
@@ -179,35 +179,32 @@ def load_fiscal_calendar(uploaded_file):
         return None
 
 def main():
-    st.title("Exploratory Data Analysis App by Ashwin Nair")
+    # Change the title of the main page
+    st.title("Exploratory Data Analysis App")
 
-    # Sidebar for file upload and navigation
+    # Sidebar with creator information and file upload
+    st.sidebar.markdown("### Made by Ashwin Nair")
     st.sidebar.title("Upload your CSV or Excel file")
     uploaded_file = st.sidebar.file_uploader("Drag and drop your data file here", type=["csv", "xlsx"])
 
     st.sidebar.title("Upload Fiscal Calendar")
-    fiscal_calendar_file = st.sidebar.file_uploader("Upload your fiscal calendar file here", type=["xlsx"])
+    fiscal_calendar_file = st.sidebar.file_uploader("Upload your fiscal calendar file here (optional)", type=["xlsx"])
 
     st.sidebar.title("Navigation")
     st.sidebar.markdown("### Choose a Page", unsafe_allow_html=True)
     pages = ["Profiling", "Data Exploration", "Time Series Analysis", "Seasonality Analysis", "Monthly Box Plots", "Totals Analysis", "Fiscal Calendar Totals"]
     page = st.sidebar.radio("", pages, key='pages')
 
-    if uploaded_file is not None and fiscal_calendar_file is not None:
+    if uploaded_file is not None:
         # Save files
         data_file_path = save_uploaded_file(uploaded_file)
-        fiscal_calendar_file_path = save_uploaded_file(fiscal_calendar_file)
-
-        # Load data
         df = load_data(data_file_path)
-
-        # Load fiscal calendar
-        fiscal_calendar = load_fiscal_calendar(fiscal_calendar_file_path)
-
-        if fiscal_calendar is None:
-            st.error("Failed to load fiscal calendar.")
-            return
-
+        
+        fiscal_calendar = None
+        if fiscal_calendar_file is not None:
+            fiscal_calendar_file_path = save_uploaded_file(fiscal_calendar_file)
+            fiscal_calendar = load_fiscal_calendar(fiscal_calendar_file_path)
+        
         if page == "Profiling":
             st.title("Profiling App by Ashwin")
             
@@ -231,12 +228,15 @@ def main():
                 
                 if df is not None:
                     # Sidebar option for calendar type selection
-                    calendar_type = st.sidebar.radio("Select Calendar Type:", ("Normal Calendar", "Fiscal Calendar"))
+                    if fiscal_calendar is not None:
+                        calendar_type = st.sidebar.radio("Select Calendar Type:", ("Normal Calendar", "Fiscal Calendar"))
+                    else:
+                        calendar_type = st.sidebar.radio("Select Calendar Type:", ("Normal Calendar",))
 
                     # Extract time features based on selected calendar type
                     if calendar_type == "Normal Calendar":
                         df = extract_time_features(df)
-                    else:
+                    elif calendar_type == "Fiscal Calendar":
                         df = extract_fiscal_time_features(df, fiscal_calendar)
                     
                     df, decomposition = perform_time_series_analysis(df, selected_column)
@@ -372,7 +372,7 @@ def main():
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         )
 
-                    elif page == "Fiscal Calendar Totals":
+                    elif page == "Fiscal Calendar Totals" and fiscal_calendar is not None:
                         st.header("**Fiscal Calendar Totals**")
 
                         # Calculate fiscal calendar totals using the provided fiscal calendar
@@ -398,6 +398,10 @@ def main():
                                 file_name="Fiscal_Calendar_Totals.xlsx",
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                             )
+                    else:
+                        st.error("Fiscal calendar is required for this analysis.")
+    else:
+        st.info("Please upload a data file to proceed.")
 
 if __name__ == "__main__":
     main()
