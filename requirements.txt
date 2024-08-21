@@ -3,5 +3,10 @@ pandas
 numpy
 plotly
 statsmodels
-ydata-profiling
+scikit-learn
+scipy
 openpyxl
+seaborn
+matplotlib
+ydata-profiling
+sweetviz
