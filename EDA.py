@@ -18,7 +18,6 @@ import statsmodels.api as sm
 from scipy import stats
 import io
 import os
-import concurrent.futures
 from streamlit.components.v1 import html
 from ydata_profiling import ProfileReport
 from sklearn.model_selection import train_test_split
@@ -436,13 +435,53 @@ def handle_missing_data(df, column, method="mean"):
 
     return df
 
-# Outlier detection with visualization
+# Outlier detection with visualization and Bell Curve addition
 def visualize_outliers(df, column, method="zscore", threshold=3, action="remove"):
     """Visualize and handle outliers, and return the modified DataFrame."""
     outliers = detect_outliers(df, column, method, threshold)
     
+    # Filtering options
+    st.subheader("Filter options for Bell Curve Plot")
+    filter_options = st.multiselect("Filter by:", ["Year", "Quarter", "Month", "WeekOfYear", "WeekOfMonth", "DayOfYear", "DayOfMonth", "DayOfWeekName"])
+
+    filtered_df = df.copy()
+
+    for filter_option in filter_options:
+        if filter_option == "Year":
+            selected_years = st.multiselect("Select year(s):", df['Year'].unique())
+            if selected_years:
+                filtered_df = filtered_df[filtered_df['Year'].isin(selected_years)]
+        elif filter_option == "Quarter":
+            selected_quarters = st.multiselect("Select quarter(s):", df['Quarter'].unique())
+            if selected_quarters:
+                filtered_df = filtered_df[filtered_df['Quarter'].isin(selected_quarters)]
+        elif filter_option == "Month":
+            selected_months = st.multiselect("Select month(s):", df['Month'].unique())
+            if selected_months:
+                filtered_df = filtered_df[filtered_df['Month'].isin(selected_months)]
+        elif filter_option == "WeekOfYear":
+            selected_weeks = st.multiselect("Select week(s) of the year:", df['WeekOfYear'].unique())
+            if selected_weeks:
+                filtered_df = filtered_df[filtered_df['WeekOfYear'].isin(selected_weeks)]
+        elif filter_option == "WeekOfMonth":
+            selected_weeks_of_month = st.multiselect("Select week(s) of the month:", df['WeekOfMonth'].unique())
+            if selected_weeks_of_month:
+                filtered_df = filtered_df[filtered_df['WeekOfMonth'].isin(selected_weeks_of_month)]
+        elif filter_option == "DayOfYear":
+            selected_days_of_year = st.multiselect("Select day(s) of the year:", df['DayOfYear'].unique())
+            if selected_days_of_year:
+                filtered_df = filtered_df[filtered_df['DayOfYear'].isin(selected_days_of_year)]
+        elif filter_option == "DayOfMonth":
+            selected_days_of_month = st.multiselect("Select day(s) of the month:", df['DayOfMonth'].unique())
+            if selected_days_of_month:
+                filtered_df = filtered_df[filtered_df['DayOfMonth'].isin(selected_days_of_month)]
+        elif filter_option == "DayOfWeekName":
+            selected_days_of_week = st.multiselect("Select day(s) of the week:", df['DayOfWeekName'].unique())
+            if selected_days_of_week:
+                filtered_df = filtered_df[filtered_df['DayOfWeekName'].isin(selected_days_of_week)]
+
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df.index, y=df[column], mode='lines', name='Original Data', line=dict(color='blue')))
+    fig.add_trace(go.Scatter(x=filtered_df.index, y=filtered_df[column], mode='lines', name='Original Data', line=dict(color='blue')))
     fig.add_trace(go.Scatter(x=outliers.index, y=outliers[column], mode='markers', name='Outliers', marker=dict(color='red')))
     
     fig.update_layout(title=f'Outliers Detection: {method.capitalize()} Method',
@@ -455,24 +494,62 @@ def visualize_outliers(df, column, method="zscore", threshold=3, action="remove"
     st.plotly_chart(fig)
     
     if action == "remove":
-        df = df[~df.index.isin(outliers.index)]
+        filtered_df = filtered_df[~filtered_df.index.isin(outliers.index)]
         st.write("Outliers removed from the dataset.")
     elif action == "cap":
         cap_value = st.slider("Select Cap Value", min_value=float(outliers[column].min()), max_value=float(outliers[column].max()))
-        df[column] = np.where(df[column] > cap_value, cap_value, df[column])
+        filtered_df[column] = np.where(filtered_df[column] > cap_value, cap_value, filtered_df[column])
         st.write("Outliers capped in the dataset.")
     
     # Display the modified dataframe
     st.write("Data after handling outliers:")
-    st.write(df)
+    st.write(filtered_df)
     
-    # Plot the cleaned data
-    fig_cleaned = px.line(df, x=df.index, y=column, title=f'Time Series After Handling Outliers ({action.capitalize()} Action)')
-    fig_cleaned.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")  # Transparent background
-    st.plotly_chart(fig_cleaned)
+    # Bell Curve Plot
+    st.subheader("Bell Curve Plot (1, 2, 3 Standard Deviations)")
 
-    return df
+    mean_value = filtered_df[column].mean()
+    std_dev = filtered_df[column].std()
+    x = np.linspace(mean_value - 4 * std_dev, mean_value + 4 * std_dev, 1000)
+    y = stats.norm.pdf(x, mean_value, std_dev)
 
+    fig_bell_curve = go.Figure()
+    fig_bell_curve.add_trace(go.Scatter(x=x, y=y, mode='lines', name='Normal Distribution', line=dict(color='blue')))
+    
+    # Add mean and standard deviation lines with annotations
+    fig_bell_curve.add_trace(go.Scatter(x=[mean_value, mean_value], y=[0, max(y)], mode='lines', name='Mean', line=dict(color='green', dash='dash')))
+    fig_bell_curve.add_annotation(x=mean_value, y=max(y), text=f"Mean: {mean_value:.2f}", showarrow=True, arrowhead=2, ax=40, ay=-40)
+
+    fig_bell_curve.add_trace(go.Scatter(x=[mean_value + std_dev, mean_value + std_dev], y=[0, max(y)], mode='lines', name='+1 Std Dev', line=dict(color='orange', dash='dot')))
+    fig_bell_curve.add_annotation(x=mean_value + std_dev, y=max(y) * 0.9, text=f"+1 Std Dev: {mean_value + std_dev:.2f}", showarrow=True, arrowhead=2, ax=40, ay=-40)
+
+    fig_bell_curve.add_trace(go.Scatter(x=[mean_value - std_dev, mean_value - std_dev], y=[0, max(y)], mode='lines', name='-1 Std Dev', line=dict(color='orange', dash='dot')))
+    fig_bell_curve.add_annotation(x=mean_value - std_dev, y=max(y) * 0.9, text=f"-1 Std Dev: {mean_value - std_dev:.2f}", showarrow=True, arrowhead=2, ax=-40, ay=-40)
+
+    fig_bell_curve.add_trace(go.Scatter(x=[mean_value + 2 * std_dev, mean_value + 2 * std_dev], y=[0, max(y)], mode='lines', name='+2 Std Dev', line=dict(color='red', dash='dot')))
+    fig_bell_curve.add_annotation(x=mean_value + 2 * std_dev, y=max(y) * 0.7, text=f"+2 Std Dev: {mean_value + 2 * std_dev:.2f}", showarrow=True, arrowhead=2, ax=40, ay=-40)
+
+    fig_bell_curve.add_trace(go.Scatter(x=[mean_value - 2 * std_dev, mean_value - 2 * std_dev], y=[0, max(y)], mode='lines', name='-2 Std Dev', line=dict(color='red', dash='dot')))
+    fig_bell_curve.add_annotation(x=mean_value - 2 * std_dev, y=max(y) * 0.7, text=f"-2 Std Dev: {mean_value - 2 * std_dev:.2f}", showarrow=True, arrowhead=2, ax=-40, ay=-40)
+
+    fig_bell_curve.add_trace(go.Scatter(x=[mean_value + 3 * std_dev, mean_value + 3 * std_dev], y=[0, max(y)], mode='lines', name='+3 Std Dev', line=dict(color='purple', dash='dot')))
+    fig_bell_curve.add_annotation(x=mean_value + 3 * std_dev, y=max(y) * 0.5, text=f"+3 Std Dev: {mean_value + 3 * std_dev:.2f}", showarrow=True, arrowhead=2, ax=40, ay=-40)
+
+    fig_bell_curve.add_trace(go.Scatter(x=[mean_value - 3 * std_dev, mean_value - 3 * std_dev], y=[0, max(y)], mode='lines', name='-3 Std Dev', line=dict(color='purple', dash='dot')))
+    fig_bell_curve.add_annotation(x=mean_value - 3 * std_dev, y=max(y) * 0.5, text=f"-3 Std Dev: {mean_value - 3 * std_dev:.2f}", showarrow=True, arrowhead=2, ax=-40, ay=-40)
+
+    fig_bell_curve.update_layout(
+        title="Bell Curve with Standard Deviations",
+        xaxis_title="Value",
+        yaxis_title="Probability Density",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        hovermode="x unified"
+    )
+
+    st.plotly_chart(fig_bell_curve)
+
+    return filtered_df
 # Missing Data Visualization with Plotly
 def visualize_missing_data(df):
     """Visualize missing data using an interactive Plotly heatmap."""
@@ -1009,23 +1086,118 @@ def main():
                     st.plotly_chart(fig)
 
             elif page == "Clustering":
-                st.header("**Clustering**")
-                clustering_columns = st.multiselect("Select columns for clustering", df.columns.tolist(), default=columns)
-                n_clusters = st.slider("Select number of clusters", 2, 10, 3)
-                
-                # Handle missing data
-                impute_method = st.selectbox("Select how to handle missing values", ["drop", "mean", "median", "mode"])
-                
-                # Perform clustering
-                df = perform_kmeans_clustering(df, clustering_columns, n_clusters, impute_method=impute_method)
-                
-                if df is not None:
-                    # Ensure df doesn't contain NaNs for plotting
-                    if df[clustering_columns].isnull().any().any():
-                        st.error("Data contains NaNs even after imputation. Please check the data.")
-                    else:
-                        fig = px.scatter_matrix(df, dimensions=clustering_columns, color='Cluster', title="K-Means Clustering")
-                        st.plotly_chart(fig)
+                        st.header("**Interactive Scatter Plot**")
+                        
+                        # Title with emoji
+                        st.title('✨ Cross-Filterable Scatter Plot from your Data')
+                        
+                        # Instructions in an expander
+                        with st.expander("ℹ️ Instructions"):
+                            st.write("""
+                                Select the X and Y axes, and optionally choose other attributes such as color and size to customize your scatter plot.
+                                You can also filter data points using the lasso or box selection tools directly on the plot.
+                            """)
+                        
+                        # Ensure at least two columns exist
+                        if len(df.columns) < 2:
+                            st.error('The data must have at least two columns.')
+                            st.stop()
+                        
+                        # Use a layout with columns for axis selection and advanced options
+                        col1, col2, col3 = st.columns([1, 1, 1])
+                        
+                        with col1:
+                            x_axis = st.selectbox('Select X-axis', options=df.columns)
+                        with col2:
+                            y_axis = st.selectbox('Select Y-axis', options=df.columns, index=1)
+                        with col3:
+                            color_option = st.selectbox('Select Color', options=[None] + df.columns.tolist(), index=0)
+                        
+                        # Advanced customization options placed on the main page now
+                        col4, col5 = st.columns([1, 1])
+                        
+                        with col4:
+                            size_option = st.selectbox('Select Size', options=[None] + df.columns.tolist(), index=0)
+                        with col5:
+                            hover_data_options = st.multiselect('Select Hover Data', options=df.columns)
+                        
+                        # Create scatter plot with Plotly
+                        fig = px.scatter(
+                            df,
+                            x=x_axis,
+                            y=y_axis,
+                            color=color_option if color_option else None,
+                            size=size_option if size_option else None,
+                            hover_data=hover_data_options,
+                            title=f'Scatter Plot of {y_axis} vs {x_axis}',
+                            template='plotly_dark',  # Set Plotly theme
+                            labels={x_axis: f"{x_axis} (units)", y_axis: f"{y_axis} (units)"}
+                        )
+                        
+                        # Improve plot layout
+                        fig.update_layout(
+                            margin=dict(l=20, r=20, t=50, b=20),
+                            paper_bgcolor='rgba(0,0,0,0)',
+                            plot_bgcolor='rgba(0,0,0,0)',
+                            font=dict(size=14),
+                        )
+                        
+                        # Add lasso/box selection tool and capture selection using streamlit-plotly-events
+                        from streamlit_plotly_events import plotly_events
+                        
+                        st.write("Use the lasso or box tool in the plot to select data points.")
+                        selected_points = plotly_events(
+                            fig,
+                            click_event=False,
+                            hover_event=False,
+                            select_event=True,
+                            override_height=600,
+                            override_width='100%'
+                        )
+                        
+                        # Check if selection exists
+                        if selected_points:
+                            # selected_points is a list of dictionaries with 'curveNumber', 'pointNumber', etc.
+                            selected_indices = [pt['pointIndex'] for pt in selected_points]
+                        
+                            # Filter dataframe based on selection
+                            filtered_df = df.iloc[selected_indices]
+                        
+                            st.write('### Filtered Data')
+                            st.dataframe(filtered_df)
+                        
+                            # Optionally, create another plot for filtered data
+                            st.write('### Scatter Plot of Filtered Data')
+                            filtered_fig = px.scatter(
+                                filtered_df,
+                                x=x_axis,
+                                y=y_axis,
+                                color=color_option if color_option else None,
+                                size=size_option if size_option else None,
+                                hover_data=hover_data_options,
+                                title=f'Filtered Scatter Plot of {y_axis} vs {x_axis}'
+                            )
+                            st.plotly_chart(filtered_fig, use_container_width=True)
+                        
+                            # Option to download the filtered data
+                            st.download_button(
+                                label="Download filtered data as CSV",
+                                data=filtered_df.to_csv().encode('utf-8'),
+                                file_name="filtered_data.csv",
+                                mime='text/csv'
+                            )
+                        else:
+                            st.info('Select points using the lasso or box tool to filter data.')
+
+
+
+
+
+
+
+
+
+
 
             elif page == "Profiling":
                 st.title("Profiling App by Ashwin")
